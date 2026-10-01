@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>クルマ購入プランナー</title>
+<meta name="theme-color" content="#0d0f12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="クルマ計画">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>[hidden]{display:none!important}html{color-scheme:light dark}body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@200;300;400;500;600&family=Noto+Sans+JP:wght@300;400;500;700&display=swap">
+<style>
+/* Layout: 余白の多い1カラム基調。試算タブは「結果（大きな数字）→ 条件スライダー → グラフ」の順。
+   色は白と黒、アクセントは青1色。数字は細いウェイトで大きく見せる。 */
+:root{
+  --bg:#f6f7f8; --surface:#ffffff; --ink:#0d0f12; --ink2:#3c424b; --muted:#7b828c; --line:#e1e4e8;
+  --accent:#2b45ff; --accent-soft:#e6eaff; --on-ink:#ffffff;
+  --pos:#12784a; --warn:#a86200; --neg:#c0352b; --neg-soft:#fbe4e1;
+  --f-num:"Albert Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-body:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0b0c0e; --surface:#131518; --ink:#f2f4f6; --ink2:#c3c8ce; --muted:#7f8791; --line:#25292e;
+  --accent:#8b9cff; --accent-soft:#1c2145; --on-ink:#0b0c0e;
+  --pos:#5fd39a; --warn:#f0b15a; --neg:#ff8a80; --neg-soft:#3a1c1a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b0c0e; --surface:#131518; --ink:#f2f4f6; --ink2:#c3c8ce; --muted:#7f8791; --line:#25292e;
+  --accent:#8b9cff; --accent-soft:#1c2145; --on-ink:#0b0c0e;
+  --pos:#5fd39a; --warn:#f0b15a; --neg:#ff8a80; --neg-soft:#3a1c1a; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.7;font-weight:400;padding-inline:20px;padding-block:20px 72px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin-inline:auto;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3,p{margin:0}
+h1{font-size:15px;font-weight:500;letter-spacing:.06em}
+h2{font-size:13px;font-weight:500;letter-spacing:.08em;color:var(--muted)}
+h3{font-size:15px;font-weight:500}
+.n{font-family:var(--f-num);font-variant-numeric:tabular-nums lining-nums;letter-spacing:-.01em}
+.muted{color:var(--muted)}
+.small{font-size:12px;line-height:1.7;color:var(--muted)}
+button{font:inherit;cursor:pointer;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:2px;flex-wrap:wrap}
+.tabs button{background:none;border:0;padding:6px 12px;font-size:13px;color:var(--muted);border-radius:99px}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--on-ink)}
+.tabs button:not([aria-selected="true"]):hover{color:var(--ink)}
+
+/* scenario bar */
+.sbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);padding:5px 14px;border-radius:99px;font-size:13px;color:var(--ink2)}
+.chip[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:500}
+.link{background:none;border:0;padding:4px 2px;font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.link:hover{color:var(--ink)}
+.link:disabled{opacity:.35;cursor:default}
+.namein{border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-size:13px;padding:3px 2px;width:9em;text-align:left}
+
+/* plan layout */
+.plan{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);grid-template-areas:"ctrl hero" "ctrl chart";column-gap:56px;row-gap:36px;align-items:start}
+.plan>.hero{grid-area:hero}.plan>.ctrl{grid-area:ctrl}.plan>.charts{grid-area:chart}
+@media (max-width:860px){.plan{grid-template-columns:minmax(0,1fr);grid-template-areas:"hero" "ctrl" "chart"}}
+.hero{display:flex;flex-direction:column;gap:18px;min-width:0}
+.eyebrow{font-size:12px;letter-spacing:.08em;color:var(--muted)}
+.bignum{font-family:var(--f-num);font-weight:200;font-size:clamp(52px,11vw,88px);line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.bignum small{font-size:.26em;font-weight:300;color:var(--muted);margin-left:.4em;letter-spacing:0}
+.verdict{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:14px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--pos)}
+.dot.warn{background:var(--warn)}.dot.bad{background:var(--neg)}
+.gauge{position:relative;height:32px;margin-top:6px}
+.gauge .rail{position:absolute;left:0;right:0;top:12px;height:2px;background:var(--line)}
+.gauge .band{position:absolute;top:8px;height:10px;background:var(--accent-soft);border-radius:2px}
+.gauge .pin{position:absolute;top:6px;width:14px;height:14px;border-radius:50%;background:var(--accent);border:3px solid var(--bg);box-shadow:0 0 0 1px var(--accent);transform:translateX(-7px)}
+.gauge .tick{position:absolute;top:22px;font-size:11px;color:var(--muted);transform:translateX(-50%);font-family:var(--f-num)}
+@media (prefers-reduced-motion:no-preference){.gauge .pin{transition:left .25s ease}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:20px 24px;padding-top:18px;border-top:1px solid var(--line)}
+.kpi .l{font-size:12px;color:var(--muted)}
+.kpi .v{font-family:var(--f-num);font-size:24px;font-weight:300;line-height:1.3}
+.kpi .s{font-size:11px;color:var(--muted);line-height:1.5}
+.stack{display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px}
+.stack i{display:block;min-width:2px}
+.k1{background:var(--ink)}.k2{background:var(--accent)}.k3{background:var(--muted)}.k4{background:var(--ink2);opacity:.5}.k5{background:var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink2)}
+.legend>span{display:inline-flex;gap:6px;align-items:center}
+.legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+/* controls */
+.ctrl{display:flex;flex-direction:column;gap:22px;min-width:0}
+.field{display:flex;flex-direction:column;gap:2px}
+.frow{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.frow label{font-size:13px;color:var(--ink2)}
+.val{display:flex;align-items:baseline;gap:4px}
+.val input{width:5.2em;border:0;background:transparent;color:var(--ink);font-family:var(--f-num);font-size:26px;font-weight:300;text-align:right;padding:0;-moz-appearance:textfield}
+.val input::-webkit-outer-spin-button,.val input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.val .u{font-size:12px;color:var(--muted);min-width:2.4em}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;margin:0;padding:0;border:0}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,var(--ink) var(--p,0%),var(--line) var(--p,0%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--ink);border:4px solid var(--bg);box-shadow:0 0 0 1px var(--ink);margin-top:-9px}
+input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:2px;background:var(--ink)}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--ink);border:4px solid var(--bg);box-shadow:0 0 0 1px var(--ink)}
+.hint{font-size:11px;color:var(--muted);line-height:1.5;min-height:1.5em}
+.seg{display:flex;border:1px solid var(--line);border-radius:99px;padding:2px;background:var(--surface);align-self:flex-start}
+.seg button{background:none;border:0;border-radius:99px;padding:4px 14px;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-size:13px;color:var(--ink2);list-style:none;display:flex;justify-content:space-between}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"＋";color:var(--muted)}
+details[open] summary::after{content:"－"}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;padding-top:14px}
+.dgrid .full{grid-column:1/-1}
+.mini{display:flex;flex-direction:column;gap:3px;min-width:0}
+.mini label{font-size:12px;color:var(--muted)}
+.mini .w{display:flex;align-items:center;gap:4px}
+.mini input,.mini select{width:100%;min-width:0;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font-family:var(--f-num);font-size:16px;padding:3px 0;border-radius:0}
+.mini select{font-family:var(--f-body);font-size:14px}
+.mini .u{font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* charts & tables */
+.charts{display:flex;flex-direction:column;gap:36px;min-width:0}
+.block{display:flex;flex-direction:column;gap:12px;min-width:0}
+svg.chart{width:100%;height:auto;display:block;overflow:visible}
+svg.chart text{font-family:var(--f-num);font-size:11px;fill:var(--muted)}
+svg.chart .gl{stroke:var(--line);stroke-width:1;fill:none}
+svg.chart .ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+svg.chart .l1{stroke:var(--ink)}
+svg.chart .l2{stroke:var(--accent)}
+svg.chart .vl{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 4;fill:none}
+svg.chart .ar{fill:var(--neg-soft);stroke:none}
+svg.chart .pt{fill:var(--bg);stroke-width:2}
+svg.chart .pt.p1{stroke:var(--ink)}svg.chart .pt.p2{stroke:var(--accent)}
+.key{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink2)}
+.key span{display:inline-flex;align-items:center;gap:6px}
+.key i{width:16px;height:2px;display:inline-block}
+.key .a1{background:var(--ink)}.key .a2{background:var(--accent)}.key .a3{width:10px;height:10px;background:var(--neg-soft);border-radius:2px}
+.callout{padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:4px;font-size:13px;color:var(--ink2);line-height:1.8}
+.callout b{color:var(--ink);font-weight:500}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
+th{font-weight:400;color:var(--muted);font-size:12px;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;padding-left:0;color:var(--ink2);white-space:nowrap}
+td.n{font-size:15px}
+tr.cur td{background:var(--accent-soft)}
+tr.cur td:first-child{padding-left:8px}
+td .s{display:block;font-size:11px;color:var(--muted);font-family:var(--f-body)}
+.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--ink2);margin-left:6px;white-space:nowrap;font-family:var(--f-body)}
+.tag.best{border-color:var(--accent);color:var(--accent)}
+.ok{color:var(--pos)}.ng{color:var(--neg)}.wn{color:var(--warn)}
+.btn{border:1px solid var(--ink);background:var(--ink);color:var(--on-ink);border-radius:99px;padding:6px 16px;font-size:13px}
+.btn.ghost{background:transparent;color:var(--ink)}
+.pagehead{display:flex;flex-direction:column;gap:6px;max-width:64ch}
+.pagehead h3{font-size:22px;font-weight:300;letter-spacing:.02em}
+.split{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:40px}
+@media (max-width:860px){.split{grid-template-columns:minmax(0,1fr)}}
+.panel{display:flex;flex-direction:column;gap:32px}
+select.pick{width:100%;border:0;border-bottom:1px solid var(--ink);background:transparent;color:var(--ink);font:inherit;font-size:14px;font-weight:500;padding:2px 0;max-width:100%;border-radius:0}
+
+/* steps */
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:grid;grid-template-columns:96px 22px minmax(0,1fr);gap:0 14px;padding:14px 0;border-bottom:1px solid var(--line);align-items:start}
+.tl .when{font-family:var(--f-num);font-size:13px;color:var(--muted);padding-top:1px}
+.tl input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--ink)}
+.tl li.done .t{color:var(--muted);text-decoration:line-through}
+.tl .t{font-weight:500;font-size:14px}
+.tl p{font-size:13px;color:var(--muted);line-height:1.7}
+@media (max-width:520px){.tl li{grid-template-columns:22px minmax(0,1fr)}.tl .when{grid-column:1/-1;padding-bottom:2px}}
+.asks{columns:2 220px;column-gap:32px;padding-left:18px;margin:8px 0 0;font-size:13px;color:var(--ink2)}
+
+/* 比較表（横スクロールなし）：広い画面は列、狭い画面は項目ごとに縦積み */
+.cmp{display:flex;flex-direction:column;min-width:0}
+.cmp-head,.cmp-r{display:grid;grid-template-columns:130px repeat(var(--n),minmax(0,1fr));column-gap:16px;align-items:start}
+.cmp-head{padding-bottom:10px;border-bottom:1px solid var(--line)}
+.cmp-col{min-width:0;font-size:13px}
+.cmp-col select.pick{width:100%}
+.cmp-r{padding:11px 0;border-bottom:1px solid var(--line);font-size:13px}
+.cmp-l{font-size:12px;color:var(--muted);padding-top:2px}
+.cmp-c{min-width:0;overflow-wrap:anywhere;line-height:1.6}
+.cmp.num .cmp-c{font-family:var(--f-num);font-size:15px}
+.cmp-c .s{display:block;font-size:11px;color:var(--muted);font-family:var(--f-body)}
+.cmp-g{margin-top:22px;padding-bottom:6px;border-bottom:1px solid var(--ink);font-size:12px;letter-spacing:.08em;color:var(--muted)}
+.mini-res{display:none}
+
+/* スマホ最適化 */
+@media (max-width:700px){
+  body{padding-inline:16px;padding-block:16px 96px}
+  .wrap{gap:22px}
+  .top{border-bottom:0;padding-bottom:0}
+  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);justify-content:space-between;gap:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+  .tabs button{flex:1;min-width:0;padding:10px 2px;font-size:12px;border-radius:10px;white-space:nowrap}
+  .sbar{gap:8px 10px}
+  .sbar .eyebrow{display:none}
+  .chip{padding:9px 14px}
+  .namein{flex:1 1 5em;min-width:5em;font-size:16px;padding:8px 2px;width:auto}
+  .link{padding:10px 6px;font-size:13px}
+  .seg button{padding:9px 16px}
+  .btn{padding:10px 18px}
+  input,select{font-size:16px}
+  .mini select{font-size:16px}
+  summary{padding:8px 0}
+  .kpis{grid-template-columns:1fr 1fr}
+  .callout{padding:12px 14px}
+  .mini-res{position:fixed;top:0;left:0;right:0;z-index:15;display:flex;align-items:baseline;justify-content:space-between;gap:12px;background:var(--surface);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px;transform:translateY(-110%);pointer-events:none}
+  .mini-res.show{transform:none;pointer-events:auto}
+  .mini-res .mr{font-family:var(--f-num);font-size:22px;font-weight:400}
+  .mini-res .mr small{font-size:12px;color:var(--muted);margin-left:2px}
+  .mini-res .verdict{font-size:12px;gap:6px}
+
+  /* 項目ごとの縦積み */
+  .cmp-head{display:none}
+  .cmp-head.hm{display:flex;flex-direction:column;gap:10px}
+  .cmp-head.hm>div:first-child{display:none}
+  .cmp-r{display:block;padding:12px 0}
+  .cmp-l{margin-bottom:4px}
+  .cmp-c{display:grid;grid-template-columns:104px minmax(0,1fr);gap:0 10px;padding:3px 0}
+  .cmp-c::before{content:attr(data-n);font-size:12px;color:var(--muted);font-family:var(--f-body);overflow-wrap:anywhere}
+
+  /* 表をカードに */
+  table.rt,table.rt tbody{display:block}
+  table.rt thead{display:none}
+  table.rt tr{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;padding:14px 0;border-bottom:1px solid var(--line)}
+  table.rt tr.cur{background:var(--accent-soft);padding-inline:10px;margin-inline:-10px;border-radius:6px}
+  table.rt td,table.rt td:first-child{display:block;padding:0;border:0;text-align:left!important;white-space:normal!important;min-width:0!important;background:none!important}
+  table.rt td::before{content:attr(data-l);display:block;font-size:11px;color:var(--muted);font-family:var(--f-body)}
+  table.rt td:first-child{grid-column:1/-1;font-size:15px;color:var(--ink)}
+  table.rt td:first-child::before{display:none}
+  table.rt td.act{grid-column:1/-1}
+  table.rt td.act::before{display:none}
+  table.rt td:empty{display:none}
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>クルマ購入プランナー</h1>
+      <p class="small" id="asof"></p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="画面">
+      <button role="tab" data-tab="plan" aria-selected="true">試算</button>
+      <button role="tab" data-tab="dp" aria-selected="false">頭金</button>
+      <button role="tab" data-tab="sc" aria-selected="false">シナリオ</button>
+      <button role="tab" data-tab="cars" aria-selected="false">車種比較</button>
+      <button role="tab" data-tab="cat" aria-selected="false">カタログ</button>
+      <button role="tab" data-tab="steps" aria-selected="false">進め方</button>
+    </nav>
+  </header>
+
+  <div class="sbar" aria-label="シナリオ">
+    <span class="eyebrow">シナリオ</span>
+    <div class="chips" id="chips"></div>
+    <input class="namein" id="sname" type="text" aria-label="シナリオ名" maxlength="16">
+    <button class="link" id="dup">複製</button>
+    <button class="link" id="del">削除</button>
+    <button class="link" id="copy">要約をコピー</button>
+    <span class="small" id="copied" aria-live="polite"></span>
+  </div>
+
+  <!-- 試算 -->
+  <section id="tab-plan" class="plan" role="tabpanel">
+    <div class="mini-res" id="miniRes" aria-hidden="true"></div>
+    <div class="hero" aria-live="polite">
+      <div class="eyebrow">ローン返済中の毎月の負担（ローン＋維持費）</div>
+      <div class="bignum" id="big"></div>
+      <div class="verdict" id="verdict"></div>
+      <div class="gauge" id="gauge"></div>
+      <div class="kpis" id="kpis"></div>
+      <div>
+        <div class="stack" id="stack"></div>
+        <div class="legend" id="legend" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div class="ctrl">
+      <div class="field"><div class="frow"><label for="n-price">車両価格</label><div class="val"><input id="n-price" type="number" inputmode="decimal" data-k="S.price"><span class="u">万円</span></div></div><input type="range" data-k="S.price" min="150" max="700" step="5" aria-label="車両価格"><div class="hint" id="h-price"></div></div>
+      <div class="field"><div class="frow"><label for="n-down">頭金</label><div class="val"><input id="n-down" type="number" inputmode="decimal" data-k="S.down"><span class="u">万円</span></div></div><input type="range" data-k="S.down" min="0" max="400" step="10" aria-label="頭金"><div class="hint" id="h-down"></div></div>
+      <div class="field"><div class="frow"><label for="n-term">返済期間</label><div class="val"><input id="n-term" type="number" inputmode="numeric" data-k="S.term"><span class="u">年</span></div></div><input type="range" data-k="S.term" min="1" max="8" step="1" aria-label="返済期間"><div class="hint" id="h-term"></div></div>
+      <div class="field"><div class="frow"><label for="n-rate">ローン金利（実質年率）</label><div class="val"><input id="n-rate" type="number" inputmode="decimal" step="0.1" data-k="S.rate"><span class="u">%</span></div></div><input type="range" data-k="S.rate" min="0" max="9" step="0.1" aria-label="ローン金利"><div class="hint">銀行・ネット系は低め、販売店ローンは高めになりやすい。</div></div>
+      <div class="field"><div class="frow"><label>乗る年数</label></div>
+        <div class="seg" id="seg-hold"><button data-v="3">3年</button><button data-v="5">5年</button><button data-v="7">7年</button><button data-v="10">10年</button></div>
+        <div class="hint">乗る年数で売却時の価値の初期値が変わる。</div>
+      </div>
+
+      <details>
+        <summary>この車の細かい設定</summary>
+        <div class="dgrid">
+          <div class="mini"><label for="n-fee">諸費用率</label><div class="w"><input id="n-fee" type="number" step="0.5" data-k="S.fee"><span class="u">%</span></div></div>
+          <div class="mini"><label for="n-resale">売却時の価値</label><div class="w"><input id="n-resale" type="number" step="5" data-k="S.resale"><span class="u">%</span></div></div>
+          <div class="mini"><label for="n-cc">自動車税の区分</label><div class="w"><select id="n-cc" data-k="S.cc"><option value="30500">〜1.5L</option><option value="36000">1.5〜2.0L</option><option value="43500">2.0〜2.5L</option></select></div></div>
+          <div class="mini"><label for="n-kmpl">実燃費</label><div class="w"><input id="n-kmpl" type="number" step="0.5" data-k="S.kmpl"><span class="u">km/L</span></div></div>
+        </div>
+      </details>
+      <details>
+        <summary>家計と維持費（全シナリオ共通）</summary>
+        <div class="dgrid">
+          <div class="mini"><label for="n-income">世帯年収（額面）</label><div class="w"><input id="n-income" type="number" step="50" data-k="H.income"><span class="u">万円</span></div></div>
+          <div class="mini"><label for="n-take">手取り率</label><div class="w"><input id="n-take" type="number" data-k="H.take"><span class="u">%</span></div></div>
+          <div class="mini"><label for="n-capLo">月の目標</label><div class="w"><input id="n-capLo" type="number" step="0.5" data-k="H.capLo"><span class="u">万円</span></div></div>
+          <div class="mini"><label for="n-capHi">月の上限</label><div class="w"><input id="n-capHi" type="number" step="0.5" data-k="H.capHi"><span class="u">万円</span></div></div>
+          <div class="mini"><label for="n-ins">任意保険</label><div class="w"><input id="n-ins" type="number" step="500" data-k="H.ins"><span class="u">円/月</span></div></div>
+          <div class="mini"><label for="n-park">駐車場代</label><div class="w"><input id="n-park" type="number" step="1000" data-k="H.park"><span class="u">円/月</span></div></div>
+          <div class="mini"><label for="n-km">年間走行距離</label><div class="w"><input id="n-km" type="number" step="500" data-k="H.km"><span class="u">km</span></div></div>
+          <div class="mini"><label for="n-gas">ガソリン単価</label><div class="w"><input id="n-gas" type="number" step="5" data-k="H.gas"><span class="u">円/L</span></div></div>
+          <div class="mini"><label for="n-maint">車検・整備・消耗品</label><div class="w"><input id="n-maint" type="number" step="1" data-k="H.maint"><span class="u">万円/年</span></div></div>
+          <div class="mini"><label for="n-save">頭金後の貯蓄</label><div class="w"><input id="n-save" type="number" step="50" data-k="H.save"><span class="u">万円</span></div></div>
+          <p class="small full">年収は「800万円以上」の回答から仮置きした値。目標と上限は「5〜7万円」の回答。ほかは一般的な例なので実数に直してほしい。</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="charts">
+      <div class="block">
+        <h2>残債と車の価値</h2>
+        <div id="ch-eq"></div>
+        <div class="key"><span><i class="a1"></i>ローン残債</span><span><i class="a2"></i>車の価値（推定）</span><span><i class="a3"></i>残債が価値を上回る期間</span></div>
+        <div class="callout" id="eq-note"></div>
+      </div>
+      <div class="block">
+        <h2>乗る期間の総コスト</h2>
+        <div class="scroll"><table id="tot"></table></div>
+        <p class="small">売却価値はミニバンの一般的な値下がりを仮置きした値。人気車種や走行距離で大きく変わる。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 頭金 -->
+  <section id="tab-dp" hidden role="tabpanel" class="panel">
+    <div class="pagehead"><h3>頭金を貯める計画</h3><p class="small">乗り出しまでの期間で、目標の頭金に届くかを見る。目標の頭金は「試算」タブの頭金スライダーの値。</p></div>
+    <div class="split">
+      <div class="ctrl">
+        <div class="field"><div class="frow"><label for="n-dpNow">いま用意できている頭金</label><div class="val"><input id="n-dpNow" type="number" data-k="H.dpNow"><span class="u">万円</span></div></div><input type="range" data-k="H.dpNow" min="0" max="400" step="10" aria-label="用意できている頭金"></div>
+        <div class="field"><div class="frow"><label for="n-dpMon">毎月の積み立て</label><div class="val"><input id="n-dpMon" type="number" step="0.5" data-k="H.dpMon"><span class="u">万円</span></div></div><input type="range" data-k="H.dpMon" min="0" max="15" step="0.5" aria-label="毎月の積み立て"></div>
+        <div class="field"><div class="frow"><label for="n-months">乗り出しまで</label><div class="val"><input id="n-months" type="number" inputmode="numeric" data-k="H.months"><span class="u">か月</span></div></div><input type="range" data-k="H.months" min="3" max="24" step="1" aria-label="乗り出しまでの月数"><div class="hint">「2年以内」の回答から最大24か月。初期値の頭金・積み立ては例。</div></div>
+      </div>
+      <div class="charts" style="gap:20px">
+        <div id="dp-sum" class="block"></div>
+        <div id="ch-dp"></div>
+        <div class="key"><span><i class="a2"></i>貯まる頭金（利息は含めない）</span><span><i class="a1"></i>目標の頭金</span></div>
+      </div>
+    </div>
+    <div class="block">
+      <h2>頭金を変えると</h2>
+      <table id="dp-tbl" class="rt"></table>
+      <p class="small">車両価格・期間・金利は現在のシナリオのまま。</p>
+    </div>
+  </section>
+
+  <!-- シナリオ比較 -->
+  <section id="tab-sc" hidden role="tabpanel" class="panel">
+    <div class="pagehead"><h3>シナリオ比較</h3><p class="small">上のシナリオバーで複製して、期間や頭金を変えたものを並べる。最大4つ。データはこのブラウザにだけ保存される。</p></div>
+    <div id="sc-tbl"></div>
+  </section>
+
+  <!-- 車種比較 -->
+  <section id="tab-cars" hidden role="tabpanel" class="panel">
+    <div class="pagehead"><h3>車種を3台並べて比べる</h3><p class="small">価格帯と燃費はWeb検索で調べた2026年9月時点の情報で、公式カタログでは未確認。月額は現在のシナリオの頭金・期間・金利で計算している。グレード別の詳細は「車種カタログ」タブ。</p></div>
+    <div id="cars-tbl"></div>
+  </section>
+
+  <!-- 車種カタログ -->
+  <section id="tab-cat" hidden role="tabpanel" class="panel">
+    <div class="pagehead"><h3>車種カタログ</h3><p class="small">2026年9月30日にWeb検索で調べた内容の要約。公式カタログのページを直接開いて確認できていないので、価格・諸元は購入前に必ず公式サイトで照らし合わせて。「未確認」は調べきれなかった項目。</p></div>
+    <div id="cat-cmp"></div>
+    <div class="block">
+      <h2>グレードと価格</h2>
+      <div class="seg" id="cat-seg" style="flex-wrap:wrap;border-radius:18px"></div>
+      <table id="cat-grades" class="rt"></table>
+      <p class="small" id="cat-note"></p>
+    </div>
+  </section>
+
+  <!-- 進め方 -->
+  <section id="tab-steps" hidden role="tabpanel" class="panel">
+    <div class="pagehead"><h3>乗り出しまでの進め方</h3><p class="small">「頭金」タブで決めた期間から逆算した時期の目安。チェックはこのブラウザにだけ保存される。</p></div>
+    <ol class="tl" id="tl"></ol>
+    <div class="callout"><b>決算期（3月・9月）</b>は値引きが出やすいと言われるが、確約ではない。時間があるので、複数の販売店の在庫を長めに観察して相場をつかむ方が効く。</div>
+    <div class="block">
+      <h2>まだ決まっていないこと</h2>
+      <ul class="asks"><li>実際の世帯年収（手取り）</li><li>頭金に積み増せる額</li><li>他に返済中のローン</li><li>保険の等級（今の割引率）</li><li>2台目を使う場面（送迎・買い物・遠出）</li><li>駐車場のサイズ・高さの制限</li></ul>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){return document.getElementById(id)};
+  var yen = function(n){return "¥" + Math.round(n).toLocaleString("ja-JP")};
+  var man = function(n){return Math.round(n/10000).toLocaleString("ja-JP") + "万円"};
+  var man1 = function(n){return (Math.round(n/1000)/10).toLocaleString("ja-JP",{minimumFractionDigits:1,maximumFractionDigits:1}) + "万円"};
+  var esc = function(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})};
+
+  function pmt(P,r,n){ if(P<=0) return 0; if(r===0) return P/n; return P*r/(1-Math.pow(1+r,-n)); }
+  function bal(P,r,m,k){ if(P<=0) return 0; if(r===0) return Math.max(0,P-m*k); return Math.max(0,P*Math.pow(1+r,k)-m*(Math.pow(1+r,k)-1)/r); }
+  function pv(m,r,n){ if(r===0) return m*n; return m*(1-Math.pow(1+r,-n))/r; }
+
+  var RESALE = {3:60,5:45,7:35,10:20};
+
+  /* 車種データ：2026年9月30日にWeb検索で調べた内容の要約。公式カタログでは未確認。価格は税込・万円。 */
+  var TBD = "未確認";
+  var CARS = [
+    {n:"ホンダ フリード e:HEV", short:"フリード", lo:302, hi:337, wltc:25.4, cc:30500, seat:true, slide:true, hv:true, saf:true,
+     note:"コンパクトなのに3列。取り回しが楽で燃費も良い。3列目は短距離向け。",
+     priceNote:"2025年2月改定後・2WD・税込。4WDの価格は未確認。",
+     info:{launched:"3代目 2024年6月28日", updated:"2025年2月6日 e:HEV一部改良（新塗料、安全装備の適用範囲拡大、全グレード+16.5万円）", next:"2026年11月に一部改良と特別仕様車BLACK STYLE、AIR EXに5人乗り追加との報道あり。公式発表は未確認。",
+       body:"コンパクトミニバン", dims:"4310×1695×1755mm（AIR EX 2WD）", wb:"2740mm", turn:"5.2m", weight:"1,480kg（AIR EX 2WD）", room:TBD,
+       pt:"1.5L直4エンジン（106ps）＋2モーター e:HEV（モーター123ps）", wltc:"25.3〜25.6km/L（2WD）", seats:"5・6・7人（グレードで異なる）", slide:"両側スライドドア（電動/手動の別はグレード確認）", safety:"Honda SENSING（2025年改良で一部機能の適用範囲を拡大）"},
+     grades:[
+      {g:"e:HEV AIR",seat:"6人",drive:"2WD",p:302.28},
+      {g:"e:HEV AIR EX",seat:"6人",drive:"2WD",p:321.20},
+      {g:"e:HEV AIR EX",seat:"7人",drive:"2WD",p:325.60,wltc:25.3},
+      {g:"e:HEV CROSSTAR",seat:"5人",drive:"2WD",p:332.75},
+      {g:"e:HEV CROSSTAR",seat:"6人",drive:"2WD",p:337.15}],
+     src:[["ホンダ公式ニュース（2025年 e:HEV一部改良）","https://global.honda/jp/news/2025/4250120.html"],["グーネット カタログ","https://www.goo-net.com/catalog/HONDA/FREED/10153870/"],["公式カタログ","https://www.honda.co.jp/Freed/"]]},
+    {n:"トヨタ シエンタ HYBRID", short:"シエンタ", lo:250, hi:318, wltc:28.2, cc:30500, seat:true, slide:true, hv:true, saf:true,
+     note:"燃費が非常に良く、小さくて運転しやすい。3列目は狭め。",
+     priceNote:"2026年8月改良後・2WD・税込。E-Four（4WD）は約20万円高い。",
+     info:{launched:"2代目 2022年8月23日（ハイブリッド設定）", updated:"2026年8月3日 一部改良（新色クリアベージュ、2トーン全廃、E-Fourに寒冷地仕様を標準化、価格+約3〜8万円）", next:"未確認",
+       body:"コンパクトミニバン", dims:"4260×1695×1695〜1715mm", wb:"2750mm", turn:"5.0m", weight:TBD, room:"室内長2,545×幅1,530×高1,300mm（7人乗り）",
+       pt:"1.5L直3エンジン（91ps）＋モーター", wltc:"25.3〜28.8km/L", seats:"5・7人", slide:"両側スライドドア（パワー/手動の別はグレード確認）", safety:"Toyota Safety Sense"},
+     grades:[
+      {g:"HYBRID X",seat:"5人",drive:"2WD",p:250.47},{g:"HYBRID X",seat:"7人",drive:"2WD",p:254.43},
+      {g:"HYBRID G",seat:"5人",drive:"2WD",p:283.36},{g:"HYBRID G",seat:"7人",drive:"2WD",p:287.43},
+      {g:"HYBRID Z",seat:"5人",drive:"2WD",p:314.27},{g:"HYBRID Z",seat:"7人",drive:"2WD",p:318.34}],
+     src:[["COBBY モデルチェンジ情報","https://cobby.jp/sienta-modelchange.html"],["最新自動車情報（2026年8月改良）","https://car-repo.jp/blog-entry-2026-toyota-new-sienta-partial-upgrade.html"],["公式カタログ","https://toyota.jp/sienta/"]]},
+    {n:"トヨタ ノア／ヴォクシー HYBRID", short:"ノア/ヴォクシー", lo:326, hi:439, wltc:22, cc:36000, seat:true, slide:true, hv:true, saf:true,
+     note:"流通量が多く、未使用車の在庫を探しやすい。2026年5月からハイブリッドのみ。",
+     priceNote:"2026年5月の一部改良後の価格帯。グレード別の価格は未確認。",
+     info:{launched:"4代目（90系）2022年1月", updated:"2026年5月6日 マイナーチェンジ相当の一部改良（ガソリン車廃止でHV一本化、新グレードS-X、フロントの見直し、メーター大型化、E-FourにSNOW EXTRAモード）。前回は2025年9月2日。", next:"未確認",
+       body:"Mクラスミニバン", dims:"4695×1730×1895mm（S-Z 2WD）", wb:"2850mm", turn:"5.5m", weight:"1,680kg（S-Z 2WD）", room:TBD,
+       pt:"1.8L直4エンジン（98ps）＋モーター", wltc:"22.0km/L（S-Z 2WD。他グレードは未確認）", seats:"7・8人", slide:"両側スライドドア（パワースライドの標準/オプションはグレード確認）", safety:"Toyota Safety Sense"},
+     grades:[
+      {g:"ノア HYBRID（X・S-X・S-G・S-Z）",seat:"7・8人",drive:"2WD/4WD",p:null,txt:"326.2〜431.0万円",note:"グレード別は未確認"},
+      {g:"ヴォクシー HYBRID（S-G・S-Z）",seat:"7・8人",drive:"2WD/4WD",p:null,txt:"375.1〜438.0万円",note:"グレード別は未確認"}],
+     src:[["アマインド 2026マイナーチェンジ価格表","https://amind.jp/toyota/noah-minorchange/"],["ベストカー","https://bestcarweb.jp/feature/column/1542744"],["公式カタログ（ノア）","https://toyota.jp/noah/"],["公式カタログ（ヴォクシー）","https://toyota.jp/voxy/"]]},
+    {n:"日産 セレナ e-POWER", short:"セレナ", lo:329, hi:500, wltc:20.3, cc:30500, seat:true, slide:true, hv:true, saf:true,
+     note:"室内が広い。e-POWERはエンジンで発電してモーターで走る方式で、ハイブリッドの一種。",
+     priceNote:"2026年2月マイナーチェンジ後・2WD・税込。",
+     info:{launched:"6代目（C28）2022年12月", updated:"2026年2月12日 マイナーチェンジ（ルキシオン・ハイウェイスターVのグリルを縦基調に、12.3インチGoogle搭載ナビ標準化、し忘れアラート・後席リマインダー）", next:"未確認",
+       body:"Mクラスミニバン", dims:"4690×1695×1870mm（X・8人乗り）／LUXION 4765×1715×1885mm（7人乗り）", wb:TBD, turn:TBD, weight:TBD, room:TBD,
+       pt:"1.4L発電用エンジン＋モーター駆動 e-POWER", wltc:"20.3km/L（2WD）", seats:"7・8人（グレードで異なる）", slide:"両側スライドドア", safety:"プロパイロット（設定の有無はグレードで異なる）"},
+     grades:[
+      {g:"e-POWER X",seat:"8人",drive:"2WD",p:329.34},{g:"e-POWER X・XVパッケージ",seat:"8人",drive:"2WD",p:358.38},
+      {g:"e-POWER ハイウェイスターV",seat:"8人",drive:"2WD",p:377.52},{g:"e-POWER LUXION",seat:"7人",drive:"2WD",p:499.84}],
+     src:[["COBBY モデルチェンジ情報","https://cobby.jp/serena-modelchange.html"],["カミタケ 2026年モデル解説","https://www.kamitake.net/blog/serena-minor-change-2026/"],["公式カタログ","https://www3.nissan.co.jp/vehicles/new/serena.html"]]},
+    {n:"ホンダ ステップワゴン e:HEV", short:"ステップワゴン", lo:394, hi:441, wltc:19.8, cc:30500, seat:true, slide:true, hv:true, saf:true,
+     note:"荷室が使いやすい。AIRとSPADAで見た目と装備の方向性が違う。",
+     priceNote:"2025年5月改良後・2WD・税込。",
+     info:{launched:"6代目 2022年5月", updated:"2025年5月16日 新グレード AIR EX、e:HEV SPADA PREMIUM LINE BLACK EDITION を追加", next:"未確認",
+       body:"Mクラスミニバン", dims:"AIR 4800×1750×1840mm／SPADA 4830×1750×1840mm", wb:TBD, turn:TBD, weight:TBD, room:TBD,
+       pt:"1.5L直4エンジン＋2モーター e:HEV", wltc:"19.6〜19.8km/L", seats:"7・8人", slide:"両側スライドドア", safety:"Honda SENSING"},
+     grades:[
+      {g:"e:HEV AIR EX",seat:"7人",drive:"2WD",p:393.80,wltc:19.8},{g:"e:HEV AIR EX",seat:"8人",drive:"2WD",p:396.00},
+      {g:"e:HEV SPADA",seat:"7人",drive:"2WD",p:399.85,wltc:19.6},{g:"e:HEV SPADA",seat:"8人",drive:"2WD",p:402.05},
+      {g:"e:HEV SPADA PREMIUM LINE",seat:"7人",drive:"2WD",p:426.80},{g:"e:HEV SPADA PREMIUM LINE BLACK EDITION",seat:"7人",drive:"2WD",p:440.66}],
+     src:[["ホンダ公式ニュース（2025年5月）","https://global.honda/jp/news/2025/4250515-stepwgn.html"],["Car Watch","https://car.watch.impress.co.jp/docs/news/2014145.html"],["公式カタログ","https://www.honda.co.jp/STEPWGN/"]]},
+    {n:"トヨタ アルファード／ヴェルファイア HEV", short:"アルファード", lo:560, hi:885, wltc:17, cc:43500, seat:true, slide:true, hv:true, saf:true, resAdj:15,
+     note:"値下がりしにくく、総額が跳ねやすい。今回の予算からは大きく外れる。",
+     priceNote:"2026年6月改良後・7人乗り・税込。E-Fourは約22万円高い。",
+     info:{launched:"4代目（40系）2023年6月（ヴェルファイアも同時）", updated:"2026年6月3日 一部改良（HEV Gを新設定、PHEV Zを追加）", next:"未確認",
+       body:"Lクラスミニバン", dims:"4995×1850×1935mm", wb:TBD, turn:TBD, weight:TBD, room:"室内長3,005×幅1,660×高1,360mm",
+       pt:"2.5L直4エンジン＋モーター（ハイブリッド）", wltc:"16.7〜17.7km/L（Z）", seats:"7・8人", slide:"両側パワースライドドア", safety:"Toyota Safety Sense"},
+     grades:[
+      {g:"アルファード HEV G",seat:"7人",drive:"2WD",p:559.90},{g:"アルファード HEV Z",seat:"7人",drive:"2WD",p:639.98,wltc:17},
+      {g:"アルファード HEV Z Premier",seat:"7人",drive:"2WD",p:709.94},{g:"ヴェルファイア HEV Z Premier",seat:"7人",drive:"2WD",p:709.94},
+      {g:"ヴェルファイア HEV Executive Lounge",seat:"7人",drive:"2WD",p:884.95}],
+     src:[["トヨタ公式ニュース（PHEV発売）","https://global.toyota/jp/newsroom/toyota/41970409.html"],["最新自動車情報（2026年6月改良）","https://carislife.hatenablog.com/entry/20260203/1770044400"],["公式カタログ","https://toyota.jp/alphard/"]]},
+    {n:"三菱 デリカD:5（ディーゼル）", short:"デリカD:5", lo:451, hi:494, wltc:12.6, cc:43500, seat:true, slide:true, hv:false, saf:true,
+     note:"悪路に強い4WD。ハイブリッドの設定はなく、燃費は重視した条件に合わない。",
+     priceNote:"2026年1月改良後・4WD・税込。7人乗りと8人乗りは同価格。",
+     info:{launched:"現行型は2007年発売（2019年2月にディーゼルを大幅改良）", updated:"2026年1月9日 ビッグマイナーチェンジ（S-AWC初搭載、3グレードに整理）", next:"次期型は2027年以降との報道。未確認。",
+       body:"オフロード志向のミニバン", dims:"4800×1795×1875mm", wb:TBD, turn:TBD, weight:TBD, room:TBD,
+       pt:"2.2Lクリーンディーゼルターボ＋8速AT（4WD）", wltc:"12.6km/L", seats:"7・8人", slide:"両側スライドドア", safety:"e-Assist"},
+     grades:[
+      {g:"G",seat:"7・8人",drive:"4WD",p:451.00},{g:"G パワーパッケージ",seat:"7・8人",drive:"4WD",p:474.65},{g:"P",seat:"7・8人",drive:"4WD",p:494.45}],
+     src:[["三菱公式ニュースリリース","https://www.mitsubishi-motors.com/jp/newsroom/newsrelease/2025/20251218_2.html"],["ル・ボラン","https://levolant.jp/2025/12/29/416994/"],["公式カタログ","https://www.mitsubishi-motors.co.jp/lineup/delica_d5/"]]}
+  ];
+
+  var STEPS = [
+    {off:-1, t:"予算の天井と必須条件を固める", d:"このツールで、月の負担が目標と上限に収まる価格帯をつかむ。"},
+    {off:-1, t:"頭金の積み立てを始める", d:"貯まったぶんだけ、ローンの利息が減る。"},
+    {off:9, t:"車種を3つに絞る", d:"チャイルドシートを付けて試乗する。スライドドア、乗せ降ろし、3列目、駐車場での取り回しを見る。"},
+    {off:6, t:"任意保険とローンの下調べ", d:"候補車ごとに保険を見積もる。銀行・ネット系ローンの金利を調べる。"},
+    {off:4, t:"未使用車・認定中古の在庫を見張る", d:"複数のサイトと店を見る。年式・走行距離・保証・修復歴を同じ表にそろえる。"},
+    {off:3, t:"同じ条件で3社から見積もりを取る", d:"車両価格と諸費用を分けて出してもらい、不要なオプションを外す。"},
+    {off:2, t:"ローンの事前審査", d:"銀行やネット系と販売店ローンの金利を比べる。金利1%の差で総額は数万〜十数万円変わる。"},
+    {off:1, t:"契約前の最終確認", d:"保証の範囲と期間、整備記録、納期、キャンセル条件を紙で確認する。"},
+    {off:0, t:"納車", d:"車庫証明、保険の開始日、ETC、ドラレコ、チャイルドシートの取り付けを段取りする。"}
+  ];
+
+  var DEF_H = {income:900,take:77,capLo:5,capHi:7,ins:6000,park:0,km:7500,gas:175,maint:12,save:200,dpNow:100,dpMon:3,months:24};
+  function newS(o){ var s={name:"シナリオ",price:320,down:100,fee:8,rate:3,term:5,hold:7,resale:35,cc:30500,kmpl:15}; for(var k in o) s[k]=o[k]; return s; }
+  var state = {H:Object.assign({},DEF_H), S:[newS({name:"5年ローン"}), newS({name:"7年ローン",term:7}), newS({name:"頭金150万",down:150})], idx:0, cars:[0,1,2], done:{}, catModel:0};
+  try{
+    var raw = localStorage.getItem("carplanner.v2");
+    if(raw){ var p = JSON.parse(raw); if(p && p.S && p.S.length){ state.H = Object.assign({},DEF_H,p.H); state.S = p.S.map(function(s){return newS(s)}); state.idx = Math.min(p.idx||0,state.S.length-1); state.cars = p.cars||state.cars; state.done = p.done||{}; } }
+  }catch(e){}
+  function save(){ try{ localStorage.setItem("carplanner.v2", JSON.stringify({H:state.H,S:state.S,idx:state.idx,cars:state.cars,done:state.done})); }catch(e){} }
+  function cur(){ return state.S[state.idx]; }
+  function getP(path){ var a=path.split("."); return (a[0]==="S"?cur():state.H)[a[1]]; }
+  function setP(path,v){ var a=path.split("."); (a[0]==="S"?cur():state.H)[a[1]]=v; }
+
+  function calc(H,s,over){
+    if(over){ s = Object.assign({},s,over); }
+    var price=s.price*1e4, down=s.down*1e4, fees=price*s.fee/100;
+    var loan=Math.max(0,price+fees-down), r=s.rate/100/12, n=Math.max(1,Math.round(s.term*12));
+    var m=pmt(loan,r,n);
+    var fuel = s.kmpl>0 ? H.km/s.kmpl*H.gas/12 : 0;
+    var maintM = H.maint*1e4/12, tax = s.cc/12;
+    var runM = tax + H.ins + fuel + H.park + maintM;
+    var totalM = m + runM;
+    var takeM = H.income*1e4*H.take/100/12;
+    var hold=s.hold, HM=hold*12;
+    var paid = m*Math.min(n,HM);
+    var balance = HM<n ? bal(loan,r,m,HM) : 0;
+    var resaleV = price*s.resale/100;
+    var carNet = down + paid + balance - resaleV;
+    var runTotal = runM*12*hold;
+    var grand = carNet + runTotal;
+    var interest = Math.max(0,m*n-loan);
+    function capPrice(capMan){
+      var payCap = Math.max(0, capMan*1e4 - runM);
+      return Math.max(0,(pv(payCap,r,n)+down)/(1+s.fee/100));
+    }
+    return {s:s,price:price,down:down,fees:fees,loan:loan,r:r,n:n,m:m,runM:runM,tax:tax,fuel:fuel,maintM:maintM,totalM:totalM,takeM:takeM,
+      paid:paid,balance:balance,resaleV:resaleV,carNet:carNet,runTotal:runTotal,grand:grand,interest:interest,
+      capLoPrice:capPrice(H.capLo), capHiPrice:capPrice(H.capHi)};
+  }
+  function verdict(H,c){
+    var lo=H.capLo*1e4, hi=H.capHi*1e4;
+    if(c.totalM<=lo) return ["ok","目標の範囲より低い（余裕あり）",hi-c.totalM,true];
+    if(c.totalM<=hi) return ["ok","目標の範囲内",hi-c.totalM,true];
+    if(c.totalM<=hi*1.15) return ["warn","上限をやや超える",c.totalM-hi,false];
+    return ["bad","上限を超える",c.totalM-hi,false];
+  }
+  function toneCls(v){ return v[0]==="ok"?"ok":v[0]==="warn"?"wn":"ng"; }
+
+  function niceMax(v){ var steps=[10,20,25,50,100,200,250,500,1000]; for(var i=0;i<steps.length;i++){ if(v/steps[i]<=5) return {max:Math.ceil(v/steps[i])*steps[i],step:steps[i]}; } return {max:Math.ceil(v/1000)*1000,step:1000}; }
+  function chartSVG(o){
+    var W=Math.max(300,Math.min(640,(document.documentElement.clientWidth||360)-40)),H=W<500?220:250,L=W<500?40:44,R=14,T=22,B=28;
+    var sx=function(x){return L+(x/o.xMax)*(W-L-R)}, sy=function(y){return T+(1-y/o.yMax)*(H-T-B)};
+    var path=function(pts,close){return pts.map(function(p,i){return (i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)}).join('')+(close?'Z':'')};
+    var out='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(o.label)+'">';
+    for(var y=0;y<=o.yMax+1e-9;y+=o.yStep){ out+='<path class="gl" d="M'+L+' '+sy(y).toFixed(1)+'H'+(W-R)+'"/><text x="'+(L-8)+'" y="'+(sy(y)+4).toFixed(1)+'" text-anchor="end">'+o.yFmt(y)+'</text>'; }
+    o.xTicks.forEach(function(x){ out+='<text x="'+sx(x).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle">'+o.xFmt(x)+'</text>'; });
+    (o.areas||[]).forEach(function(a){ out+='<path class="ar" d="'+path(a,true)+'"/>'; });
+    (o.vlines||[]).forEach(function(v){ out+='<path class="vl" d="M'+sx(v.x).toFixed(1)+' '+T+'V'+(H-B)+'"/><text x="'+sx(v.x).toFixed(1)+'" y="'+(T-8)+'" text-anchor="middle">'+esc(v.label)+'</text>'; });
+    (o.hlines||[]).forEach(function(h){ out+='<path class="gl" style="stroke:var(--ink);stroke-dasharray:4 4" d="M'+L+' '+sy(h.y).toFixed(1)+'H'+(W-R)+'"/><text x="'+(W-R)+'" y="'+(sy(h.y)-6).toFixed(1)+'" text-anchor="end" style="fill:var(--ink)">'+esc(h.label)+'</text>'; });
+    o.lines.forEach(function(l){ out+='<path class="ln '+l.cls+'" d="'+path(l.pts)+'"/>'; });
+    (o.dots||[]).forEach(function(d){ out+='<circle class="pt '+d.cls+'" cx="'+sx(d.x).toFixed(1)+'" cy="'+sy(d.y).toFixed(1)+'" r="4"/>'; });
+    return out+'</svg>';
+  }
+
+  function renderPlan(){
+    var H=state.H, s=cur(), c=calc(H,s);
+    $("asof").textContent = new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long"}) + "時点の試算";
+    $("big").innerHTML = yen(c.totalM) + "<small>/月</small>";
+    var v = verdict(H,c);
+    $("verdict").innerHTML = '<span class="dot '+(v[0]==="ok"?"":v[0])+'"></span><b style="font-weight:500">'+v[1]+'</b><span class="muted">'+(v[3]?"上限まであと ":"上限より ")+yen(v[2])+(v[3]?"":" 高い")+'</span>';
+
+    var scaleMax = Math.max(12, H.capHi*1.6)*1e4, pos = function(x){return Math.min(100,x/scaleMax*100)};
+    $("miniRes").innerHTML = '<span class="mr">'+yen(c.totalM)+'<small>/月</small></span><span class="verdict"><span class="dot '+(v[0]==="ok"?"":v[0])+'"></span>'+v[1]+'</span>';
+    $("gauge").innerHTML = '<div class="rail"></div><div class="band" style="left:'+pos(H.capLo*1e4)+'%;width:'+(pos(H.capHi*1e4)-pos(H.capLo*1e4))+'%"></div>'+
+      '<div class="tick" style="left:'+pos(H.capLo*1e4)+'%">'+H.capLo+'万</div><div class="tick" style="left:'+pos(H.capHi*1e4)+'%">'+H.capHi+'万</div>'+
+      '<div class="pin" style="left:'+pos(c.totalM)+'%"></div>';
+
+    var ratio = c.takeM ? c.totalM/c.takeM*100 : 0;
+    var kp = [
+      ["ローン返済", yen(c.m), "借入 "+man(c.loan)+"（諸費用込み）"],
+      ["維持費", yen(c.runM), "完済後はこの額だけ"],
+      ["手取りに対する割合", ratio.toFixed(1)+"%", "手取り月 "+man1(c.takeM)+"、15%以下が目安"],
+      ["買える価格の上限", man(c.capHiPrice), "月"+H.capHi+"万円なら。月"+H.capLo+"万円なら "+man(c.capLoPrice)]
+    ];
+    $("kpis").innerHTML = kp.map(function(k){return '<div class="kpi"><div class="l">'+k[0]+'</div><div class="v">'+k[1]+'</div><div class="s">'+k[2]+'</div></div>'}).join("");
+
+    var parts=[["ローン返済",c.m,"k1"],["ガソリン",c.fuel,"k2"],["保険",H.ins,"k3"],["税・車検・整備",c.tax+c.maintM,"k4"],["駐車場",H.park,"k5"]].filter(function(p){return p[1]>0});
+    var sum=parts.reduce(function(a,p){return a+p[1]},0)||1;
+    $("stack").innerHTML = parts.map(function(p){return '<i class="'+p[2]+'" style="width:'+(p[1]/sum*100)+'%" title="'+p[0]+'"></i>'}).join("");
+    $("legend").innerHTML = parts.map(function(p){return '<span><i class="'+p[2]+'"></i>'+p[0]+' <span class="n">'+yen(p[1])+'</span></span>'}).join("");
+
+    $("h-price").textContent = "月"+H.capHi+"万円に収めるなら、この条件で〜"+man(c.capHiPrice);
+    $("h-down").textContent = "借入 "+man(c.loan)+"。頭金が諸費用（"+man(c.fees)+"）を下回ると、購入直後から残債が車の価値を上回る。";
+    $("h-term").textContent = "利息は総額で "+man(c.interest)+"。"+(s.term>s.hold?"乗る年数より長いので、売却時に残債が残る。":"乗る年数の内に完済できる。");
+
+    var N = Math.max(s.term,s.hold,1)*12, balPts=[], valPts=[], maxV=0, gapMonths=0, maxGap=0, firstGap=-1, lastGap=-1;
+    for(var k=0;k<=N;k++){
+      var b = k>=c.n ? 0 : bal(c.loan,c.r,c.m,k)/1e4;
+      var val = c.price*Math.pow(Math.max(0.01,s.resale/100), k/(s.hold*12))/1e4;
+      balPts.push([k/12,b]); valPts.push([k/12,val]); maxV=Math.max(maxV,b,val);
+      if(b>val+1e-6){ gapMonths++; maxGap=Math.max(maxGap,b-val); if(firstGap<0) firstGap=k; lastGap=k; }
+    }
+    var nm = niceMax(maxV), areas=[], run=[];
+    for(var i=0;i<=N;i++){
+      var over = balPts[i][1]>valPts[i][1]+1e-6;
+      if(over) run.push(i);
+      if((!over || i===N) && run.length){
+        areas.push(run.map(function(j){return balPts[j]}).concat(run.slice().reverse().map(function(j){return valPts[j]}))); run=[];
+      }
+    }
+    var xt=[], span=N/12, stepY = span>6?2:1; for(var t=0;t<=span+1e-9;t+=stepY) xt.push(t);
+    var vl=[]; if(s.term===s.hold){ vl.push({x:s.term,label:"完済・売却"}); } else { vl.push({x:s.term,label:"完済"}); vl.push({x:s.hold,label:"売却"}); }
+    $("ch-eq").innerHTML = chartSVG({label:"ローン残債と車の価値の推移",xMax:span,yMax:nm.max,yStep:nm.step,xTicks:xt,xFmt:function(x){return x+"年"},yFmt:function(y){return y+"万"},
+      lines:[{pts:balPts,cls:"l1"},{pts:valPts,cls:"l2"}],areas:areas,vlines:vl,
+      dots:[{x:0,y:balPts[0][1],cls:"p1"},{x:0,y:valPts[0][1],cls:"p2"}]});
+    if(gapMonths>0){
+      var endY = Math.floor((lastGap+1)/12), endM=(lastGap+1)%12;
+      $("eq-note").innerHTML = '<b>残債が車の価値を上回る期間が約'+gapMonths+'か月ある</b>（最大差 約'+Math.round(maxGap)+'万円、'+(firstGap===0?'購入直後':'途中')+'から'+endY+'年'+endM+'か月ごろまで）。この間に事故や急な手放しがあると、差額が持ち出しになる。頭金を増やすか期間を短くすると縮まる。車両保険の内容も見ておきたい。';
+    } else {
+      $("eq-note").innerHTML = '<b>残債は車の価値を下回り続ける</b>。途中で売却しても、残債を返せる見込みの条件。';
+    }
+
+    var rows=[["頭金",c.down],["ローン返済（乗る期間内）",c.paid],["売却時に残るローン残高",c.balance],["売却価格（差し引き）",-c.resaleV],["維持費（"+s.hold+"年分）",c.runTotal]];
+    $("tot").innerHTML = '<tbody>'+rows.map(function(r){return '<tr><td>'+r[0]+'</td><td class="n">'+(r[1]<0?"−":"")+yen(Math.abs(r[1]))+'</td></tr>'}).join("")+
+      '<tr><td style="color:var(--ink);font-weight:500">'+s.hold+'年間の総コスト</td><td class="n" style="font-weight:500">'+yen(c.grand)+'<span class="s">月あたり '+yen(c.grand/(s.hold*12))+'</span></td></tr></tbody>';
+  }
+
+  function renderDP(){
+    var H=state.H, s=cur(), target=s.down, now=H.dpNow, mon=H.dpMon, M=Math.max(1,H.months);
+    var final = now+mon*M, short=Math.max(0,target-final), extra=Math.max(0,final-target);
+    var need = Math.max(0,(target-now)/M);
+    var reach = now>=target ? 0 : (mon>0 ? Math.ceil((target-now)/mon) : -1);
+    var head, tone;
+    if(now>=target){ head="目標の頭金はすでに用意できている"; tone="ok"; }
+    else if(reach>=0 && reach<=M){ head=reach+"か月後に目標に届く（乗り出しの"+(M-reach)+"か月前）"; tone="ok"; }
+    else { head="乗り出し時点で "+Math.round(short)+"万円 足りない"; tone="warn"; }
+    var c0=calc(H,s), c1 = extra>0 ? calc(H,s,{down:s.down+extra}) : null;
+    var h = '<div class="eyebrow">目標の頭金 '+target+'万円 に対して</div><div class="bignum" style="font-size:clamp(40px,8vw,64px)">'+Math.round(final)+'<small>万円 貯まる見込み</small></div>'+
+      '<div class="verdict"><span class="dot '+(tone==="ok"?"":tone)+'"></span><b style="font-weight:500">'+head+'</b></div>'+
+      '<p class="small">目標に届く積み立ては月 <b class="n" style="color:var(--ink)">'+need.toFixed(1)+'万円</b>。いまの月 '+mon+'万円は手取り月収の '+(c0.takeM?(mon*1e4/c0.takeM*100).toFixed(1):0)+'% にあたる。</p>';
+    if(c1){ h += '<div class="callout">余る <b>'+Math.round(extra)+'万円</b> も頭金に足すと、月のローン返済が <b>'+yen(c0.m-c1.m)+'</b> 減り、利息が <b>'+man(c0.interest-c1.interest)+'</b> 減る。ただし手元の貯蓄（いま '+H.save+'万円）を削り過ぎないこと。</div>'; }
+    $("dp-sum").innerHTML = h;
+
+    var pts=[]; for(var k=0;k<=M;k++) pts.push([k,now+mon*k]);
+    var nm = niceMax(Math.max(target,final,10)*1.1), tk=[], stp = M>12?6:3; for(var t=0;t<=M;t+=stp) tk.push(t); if(tk[tk.length-1]!==M) tk.push(M);
+    $("ch-dp").innerHTML = chartSVG({label:"頭金の積み立て推移",xMax:M,yMax:nm.max,yStep:nm.step,xTicks:tk,xFmt:function(x){return x+"か月"},yFmt:function(y){return y+"万"},
+      lines:[{pts:pts,cls:"l2"}],hlines:[{y:target,label:"目標 "+target+"万"}],dots:[{x:M,y:final,cls:"p2"}]});
+
+    var list=[0,50,100,150,200,250,300]; if(list.indexOf(s.down)<0){ list.push(s.down); list.sort(function(a,b){return a-b}); }
+    $("dp-tbl").innerHTML = '<thead><tr><th>頭金</th><th>借入額</th><th>月の返済</th><th>月の負担（維持費込み）</th><th>利息の総額</th></tr></thead><tbody>'+
+      list.map(function(d){ var c=calc(H,s,{down:d}); var v=verdict(H,c);
+        return '<tr class="'+(d===s.down?"cur":"")+'"><td class="n">'+d+'万円'+(d===s.down?'<span class="tag">現在</span>':'')+'</td><td class="n" data-l="借入額">'+man(c.loan)+'</td><td class="n" data-l="月の返済">'+yen(c.m)+'</td><td class="n '+toneCls(v)+'" data-l="月の負担（維持費込み）">'+yen(c.totalM)+'</td><td class="n" data-l="利息の総額">'+man(c.interest)+'</td></tr>'}).join("")+'</tbody>';
+  }
+
+  function cmp(cols, items, groups, o){
+    o=o||{};
+    var out='<div class="cmp'+(o.num?' num':'')+'" style="--n:'+cols.length+'"><div class="cmp-head'+(o.headMobile?' hm':'')+'"><div></div>'+
+      cols.map(function(c){return '<div class="cmp-col">'+c.h+'</div>'}).join('')+'</div>';
+    groups.forEach(function(g){
+      if(g.title) out+='<div class="cmp-g">'+g.title+'</div>';
+      g.rows.forEach(function(r){
+        out+='<div class="cmp-r"><div class="cmp-l">'+r[0]+'</div>'+cols.map(function(c,i){return '<div class="cmp-c" data-n="'+esc(c.n)+'">'+r[1](items[i],i)+'</div>'}).join('')+'</div>';
+      });
+    });
+    return out+'</div>';
+  }
+
+  function renderSC(){
+    var H=state.H, cs=state.S.map(function(s){return calc(H,s)});
+    var minGrand=Math.min.apply(null,cs.map(function(c){return c.grand})), minM=Math.min.apply(null,cs.map(function(c){return c.totalM}));
+    var rows=[
+      ["車両価格",function(c){return man(c.price)}],
+      ["頭金",function(c){return man(c.down)}],
+      ["返済期間・金利",function(c){return c.s.term+"年・"+c.s.rate+"%"}],
+      ["借入額",function(c){return man(c.loan)}],
+      ["月の返済",function(c){return yen(c.m)}],
+      ["月の負担（維持費込み）",function(c){var v=verdict(H,c); return '<span class="'+toneCls(v)+'">'+yen(c.totalM)+'</span>'+(c.totalM===minM&&cs.length>1?'<span class="tag best">最小</span>':'')+'<span class="s">'+v[1]+'</span>'}],
+      ["利息の総額",function(c){return man(c.interest)}],
+      ["乗る年数",function(c){return c.s.hold+"年"}],
+      ["総コスト",function(c){return man(c.grand)+(c.grand===minGrand&&cs.length>1?'<span class="tag best">最安</span>':'')+'<span class="s">月あたり '+yen(c.grand/(c.s.hold*12))+'</span>'}]
+    ];
+    var cols=state.S.map(function(s,i){return {n:s.name+(i===state.idx?"（編集中）":""),h:'<button class="link" data-open="'+i+'" style="font-size:13px;color:var(--ink);padding-left:0">'+esc(s.name)+(i===state.idx?"（編集中）":"")+'</button>'}});
+    $("sc-tbl").innerHTML = cmp(cols,cs,[{rows:rows}],{num:true});
+  }
+
+  function realKmpl(car){ return Math.round(car.wltc*0.75*2)/2; }
+  function carMid(car){ return Math.round((car.lo*0.85+car.hi*0.92)/2); }
+  function renderCars(){
+    var H=state.H, s=cur();
+    var sel = state.cars.map(function(id,slot){
+      return '<select class="pick" data-slot="'+slot+'" aria-label="車種'+(slot+1)+'">'+CARS.map(function(c,i){return '<option value="'+i+'"'+(i===id?" selected":"")+'>'+esc(c.n)+'</option>'}).join("")+'</select>';
+    });
+    var data = state.cars.map(function(id){
+      var car=CARS[id];
+      var c=calc(H,s,{price:carMid(car),cc:car.cc,kmpl:realKmpl(car),resale:s.resale+(car.resAdj||0)});
+      return {car:car,c:c,v:verdict(H,c)};
+    });
+    var mark=function(b){return b?'<span class="ok">○ あり</span>':'<span class="ng">✕ なし</span>'};
+    var minTot=Math.min.apply(null,data.map(function(d){return d.c.grand}));
+    var rows=[
+      ["7人乗り（3列目）",function(d){return mark(d.car.seat)}],
+      ["両側スライドドア",function(d){return mark(d.car.slide)}],
+      ["ハイブリッド",function(d){return mark(d.car.hv)}],
+      ["安全装備（自動ブレーキ等）",function(d){return mark(d.car.saf)}],
+      ["新車価格帯",function(d){return d.car.lo+"〜"+d.car.hi+"万円"}],
+      ["未使用車の目安",function(d){return Math.round(d.car.lo*0.85)+"〜"+Math.round(d.car.hi*0.92)+"万円"}],
+      ["試算に使う価格（中央）",function(d){return carMid(d.car)+"万円"}],
+      ["実燃費の想定",function(d){return realKmpl(d.car)+" km/L"+'<span class="s">カタログ値の75%</span>'}],
+      ["燃料代",function(d){return yen(d.c.fuel)+"/月"}],
+      ["月の返済",function(d){return yen(d.c.m)}],
+      ["月の負担（維持費込み）",function(d){return '<span class="'+toneCls(d.v)+'">'+yen(d.c.totalM)+'</span><span class="s">'+d.v[1]+'</span>'}],
+      ["総コスト（"+s.hold+"年）",function(d){return man(d.c.grand)+(d.c.grand===minTot?'<span class="tag best">最安</span>':'')}]
+    ];
+    var cols=state.cars.map(function(id,slot){return {n:CARS[id].short,h:sel[slot]}});
+    rows.push(["ひとこと",function(d){return '<span style="font-family:var(--f-body);font-size:13px;color:var(--muted)">'+d.car.note+'</span>'}]);
+    rows.push(["",function(d,i){return '<button class="btn ghost" data-use="'+i+'">この車で試算する</button>'}]);
+    $("cars-tbl").innerHTML = cmp(cols,data,[{rows:rows}],{num:true,headMobile:true});
+  }
+
+
+  function renderCat(){
+    var sel = state.cars.map(function(id,slot){
+      return '<select class="pick" data-slot="'+slot+'" aria-label="車種'+(slot+1)+'">'+CARS.map(function(c,i){return '<option value="'+i+'"'+(i===id?" selected":"")+'>'+esc(c.n)+'</option>'}).join("")+'</select>';
+    });
+    var cs = state.cars.map(function(id){return CARS[id]});
+    var tv = function(v){ return v===TBD ? '<span class="muted">未確認</span>' : esc(v); };
+    var groups = [
+      ["発売と改良",[["現行型の発売",function(c){return tv(c.info.launched)}],["直近の改良",function(c){return tv(c.info.updated)}],["今後の予定・報道",function(c){return tv(c.info.next)}]]],
+      ["ボディ",[["ボディタイプ",function(c){return tv(c.info.body)}],["全長×全幅×全高",function(c){return tv(c.info.dims)}],["ホイールベース",function(c){return tv(c.info.wb)}],["最小回転半径",function(c){return tv(c.info.turn)}],["車両重量",function(c){return tv(c.info.weight)}],["室内寸法",function(c){return tv(c.info.room)}]]],
+      ["走りと使い勝手",[["パワートレイン",function(c){return tv(c.info.pt)}],["WLTC燃費",function(c){return tv(c.info.wltc)}],["乗車定員",function(c){return tv(c.info.seats)}],["スライドドア",function(c){return tv(c.info.slide)}],["安全装備",function(c){return tv(c.info.safety)}]]],
+      ["価格",[["新車価格帯（2WD中心）",function(c){return '<span class="n" style="font-size:14px">'+c.lo+'〜'+c.hi+'万円</span>'}],["価格の注記",function(c){return tv(c.priceNote)}]]],
+      ["出典",[["調べたページ",function(c){return c.src.map(function(x){return '<a href="'+x[1]+'" target="_blank" rel="noopener" style="color:var(--accent)">'+esc(x[0])+'</a>'}).join("<br>")}]]]
+    ];
+    var cols=state.cars.map(function(id,slot){return {n:CARS[id].short,h:sel[slot]}});
+    $("cat-cmp").innerHTML = cmp(cols,cs,groups.map(function(g){return {title:g[0],rows:g[1]}}),{headMobile:true});
+
+    $("cat-seg").innerHTML = CARS.map(function(c,i){return '<button data-cat="'+i+'" aria-pressed="'+(i===state.catModel)+'">'+esc(c.short)+'</button>'}).join("");
+    var car = CARS[state.catModel];
+    $("cat-grades").innerHTML = '<thead><tr><th>グレード</th><th>定員</th><th>駆動</th><th>価格（税込）</th><th>WLTC</th><th></th></tr></thead><tbody>'+
+      car.grades.map(function(g,i){
+        var price = g.p!=null ? '<span class="n" style="font-size:15px">'+g.p.toLocaleString("ja-JP",{minimumFractionDigits:2,maximumFractionDigits:2})+'万円</span>' : '<span class="n" style="font-size:14px">'+g.txt+'</span>';
+        return '<tr><td style="white-space:normal;min-width:170px">'+esc(g.g)+(g.note?'<span class="s">'+esc(g.note)+'</span>':'')+'</td><td style="text-align:right" data-l="定員">'+g.seat+'</td><td style="text-align:right" data-l="駆動">'+g.drive+'</td><td data-l="価格（税込）">'+price+'</td><td class="n" style="font-size:14px" data-l="WLTC">'+(g.wltc?g.wltc+' km/L':'—')+'</td><td class="act">'+(g.p!=null?'<button class="btn ghost" data-grade="'+i+'">この価格で試算</button>':'')+'</td></tr>';
+      }).join("")+'</tbody>';
+    $("cat-note").textContent = car.priceNote+" "+car.note;
+  }
+
+  function renderSteps(){
+    var M=Math.max(1,state.H.months), now=new Date();
+    var ym=function(m){ var d=new Date(now.getFullYear(),now.getMonth()+m,1); return d.getFullYear()+"年"+(d.getMonth()+1)+"月"; };
+    $("tl").innerHTML = STEPS.map(function(st,i){
+      var when = st.off<0 ? "いま" : (M-st.off<=0 && st.off>0 ? "いま" : ym(M-st.off));
+      var done=!!state.done[i];
+      return '<li class="'+(done?"done":"")+'"><span class="when">'+when+'</span><input type="checkbox" id="st'+i+'" data-i="'+i+'"'+(done?" checked":"")+'><label for="st'+i+'"><div class="t">'+st.t+'</div><p>'+st.d+'</p></label></li>';
+    }).join("");
+  }
+
+  function renderBar(){
+    $("chips").innerHTML = state.S.map(function(s,i){return '<button class="chip" data-chip="'+i+'" aria-pressed="'+(i===state.idx)+'">'+esc(s.name)+'</button>'}).join("");
+    $("sname").value = cur().name;
+    $("dup").disabled = state.S.length>=4;
+    $("del").disabled = state.S.length<=1;
+    $("seg-hold").querySelectorAll("button").forEach(function(b){ b.setAttribute("aria-pressed", String(+b.getAttribute("data-v")===cur().hold)); });
+  }
+
+  function paintRange(el){
+    var mn=+el.min, mx=+el.max, v=+el.value;
+    el.style.setProperty("--p", Math.max(0,Math.min(100,(v-mn)/(mx-mn)*100))+"%");
+  }
+  function syncControls(skipEl){
+    document.querySelectorAll("[data-k]").forEach(function(el){
+      if(el===skipEl) return;
+      var v=getP(el.getAttribute("data-k"));
+      el.value = String(v);
+      if(el.type==="range") paintRange(el);
+    });
+  }
+  function renderAll(){ renderPlan(); renderDP(); renderSC(); renderCars(); renderCat(); renderSteps(); }
+
+  document.addEventListener("input", function(e){
+    var el=e.target, k=el.getAttribute && el.getAttribute("data-k");
+    if(!k) return;
+    var v = parseFloat(el.value);
+    if(!isFinite(v)) v=0;
+    setP(k,v);
+    syncControls(el);
+    if(el.type==="range") paintRange(el);
+    save(); renderAll();
+  });
+  document.addEventListener("change", function(e){
+    var el=e.target; if(!el.getAttribute) return;
+    if(el.getAttribute("data-slot")!==null){ state.cars[+el.getAttribute("data-slot")]=+el.value; save(); renderCars(); renderCat(); return; }
+    if(el.getAttribute("data-i")!==null){ state.done[el.getAttribute("data-i")]=el.checked; save(); renderSteps(); }
+  });
+  function afterSwitch(){ syncControls(); save(); renderBar(); renderAll(); }
+  document.addEventListener("click", function(e){
+    var t=e.target.closest("button"); if(!t) return;
+    if(t.hasAttribute("data-tab")){
+      var id=t.getAttribute("data-tab");
+      document.querySelectorAll(".tabs button").forEach(function(b){b.setAttribute("aria-selected", String(b===t))});
+      ["plan","dp","sc","cars","cat","steps"].forEach(function(x){ $("tab-"+x).hidden = x!==id; });
+      window.scrollTo(0,0);
+      return;
+    }
+    if(t.hasAttribute("data-chip")){ state.idx=+t.getAttribute("data-chip"); afterSwitch(); return; }
+    if(t.hasAttribute("data-open")){ state.idx=+t.getAttribute("data-open"); afterSwitch(); return; }
+    if(t.parentNode && t.parentNode.id==="seg-hold"){
+      var h=+t.getAttribute("data-v"); cur().hold=h; if(RESALE[h]!==undefined) cur().resale=RESALE[h];
+      afterSwitch(); return;
+    }
+    if(t.hasAttribute("data-cat")){ state.catModel=+t.getAttribute("data-cat"); renderCat(); return; }
+    if(t.hasAttribute("data-grade")){
+      var cr=CARS[state.catModel], gg=cr.grades[+t.getAttribute("data-grade")], sc=cur();
+      sc.price=Math.round(gg.p); sc.cc=cr.cc; sc.kmpl=Math.round((gg.wltc||cr.wltc)*0.75*2)/2; sc.resale=(RESALE[sc.hold]||sc.resale)+(cr.resAdj||0); sc.name=(cr.short+" "+gg.g.replace(/e:HEV |HYBRID |e-POWER |HEV /,"")).slice(0,16);
+      afterSwitch();
+      document.querySelector('[data-tab="plan"]').click(); return;
+    }
+    if(t.hasAttribute("data-use")){
+      var car=CARS[state.cars[+t.getAttribute("data-use")]], s=cur();
+      s.price=carMid(car); s.cc=car.cc; s.kmpl=realKmpl(car); s.resale=(RESALE[s.hold]||s.resale)+(car.resAdj||0); s.name=car.short;
+      afterSwitch();
+      document.querySelector('[data-tab="plan"]').click(); return;
+    }
+  });
+  $("sname").addEventListener("input", function(){
+    cur().name=this.value||"シナリオ"; save();
+    $("chips").innerHTML = state.S.map(function(s,i){return '<button class="chip" data-chip="'+i+'" aria-pressed="'+(i===state.idx)+'">'+esc(s.name)+'</button>'}).join("");
+    renderSC();
+  });
+  $("dup").addEventListener("click", function(){
+    if(state.S.length>=4) return;
+    var c=Object.assign({},cur()); c.name=(c.name+" 複製").slice(0,16); state.S.push(c); state.idx=state.S.length-1; afterSwitch();
+  });
+  $("del").addEventListener("click", function(){
+    if(state.S.length<=1) return;
+    state.S.splice(state.idx,1); state.idx=Math.max(0,state.idx-1); afterSwitch();
+  });
+  $("copy").addEventListener("click", function(){
+    var H=state.H, s=cur(), c=calc(H,s), v=verdict(H,c);
+    var txt = "【"+s.name+"】車両"+s.price+"万円／頭金"+s.down+"万円／"+s.term+"年・金利"+s.rate+"%\n"+
+      "月の負担 "+yen(c.totalM)+"（ローン "+yen(c.m)+"＋維持費 "+yen(c.runM)+"）→ "+v[1]+"\n"+
+      s.hold+"年の総コスト "+man(c.grand)+"／利息 "+man(c.interest)+"／借入 "+man(c.loan);
+    var done=function(ok){ $("copied").textContent = ok?"コピーした":"コピーできなかった"; setTimeout(function(){$("copied").textContent=""},2200); };
+    try{ navigator.clipboard.writeText(txt).then(function(){done(true)},function(){done(false)}); }catch(err){ done(false); }
+  });
+
+  var rz; window.addEventListener("resize", function(){ clearTimeout(rz); rz=setTimeout(function(){ renderPlan(); renderDP(); },150); });
+  if(window.IntersectionObserver){
+    new IntersectionObserver(function(es){ $("miniRes").classList.toggle("show", !es[0].isIntersecting); },{threshold:0}).observe($("big"));
+  }
+  syncControls(); renderBar(); renderAll();
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+}
+</script>
+</body>
+</html>
