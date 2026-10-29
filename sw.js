@@ -1,7 +1,7 @@
 /* オフラインでも開けるようにする最小のService Worker。
    アプリ本体はキャッシュ優先、Googleフォントは取れたときだけ使う。
    index.htmlを更新したら VERSION を上げる。 */
-var VERSION = "v2";
+var VERSION = "v3";
 var CORE = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", function(e){
   e.waitUntil(caches.open(VERSION).then(function(c){ return c.addAll(CORE); }).then(function(){ return self.skipWaiting(); }));
